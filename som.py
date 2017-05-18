@@ -1,8 +1,10 @@
 import numpy as np
 from sklearn.decomposition import PCA
+import matplotlib.pyplot as plt
+# import normalizor
 
 
-class som():
+class Som:
     def __init__(self, x, y):
         self.map = []
         self.n_neurons = x * y
@@ -12,6 +14,10 @@ class som():
         self.alpha_final = 0.1
         self.shape = [x, y]
         self.epoch = 0
+        self.total = None
+        self.alpha_decay = None
+        self.sigma_decay = None
+        # self.normalizer = None
 
     def train(self, data, iteration=0, batch_size=1):
         if iteration > data.shape[0]:
@@ -19,23 +25,28 @@ class som():
         elif iteration == 0:
             iteration = data.shape[0]
         if len(self.map) == 0:
+            # if normalization is not None:
+            #     methods = {
+            #         'std': normalizor.Normalizer.standard_deviation_normalization,
+            #         'linear': normalizor.Normalizer.max_min_normalization,
+            #     }
+            #     data, self.normalizer = methods.get(normalization)(data)
+            #     print(data)
             x, y = self.shape
-            # first we initialize the map
+            # map initialization
             self.map = np.zeros((self.n_neurons, len(data[0])))
 
-            # then we the principal components of the input data
+            # extract the principal components of the input data
             eigen = PCA(10, svd_solver="randomized").fit_transform(data.T)
-            print(data.T.shape)
-            print(eigen.shape)
-            print(self.map.shape)
             eigen = eigen.T
-            # then we set different point on the map equal to principal components to force diversification
+
+            # randomize the map, better solution needed
             self.map[0] = eigen[0]
             self.map[y-1] = eigen[1]
             self.map[(x - 1) * y] = eigen[2]
             self.map[x * y - 1] = eigen[3]
-            # for i in range(4, 10):
-            #     self.map[numpy.random.randint(1, self.n_neurons)] = eigen[i]
+            for i in range(4, min([10, len(eigen)])):
+                self.map[np.random.randint(1, self.n_neurons)] = eigen[i]
 
         self.total = iteration
 
@@ -45,104 +56,95 @@ class som():
         # coefficient of decay for gaussian smoothing
         self.sigma_decay = (np.sqrt(self.shape[0]) / (4 * self.sigma)) ** (1.0 / self.total)
 
+        # shuffle training data, for better model
         samples = np.arange(len(data))
         np.random.shuffle(samples)
 
+        # training the model
         for i in range(iteration):
             idx = samples[i:i + batch_size]
-            print(idx)
+            # print(idx)
             self.iterate(data[idx])
             # self.display()
         # plt.show()
 
-    def transform(self, X):
+    def transform(self, data):
         # We simply compute the dot product of the input with the transpose of the map to get the new input vectors
-        res = np.dot(np.exp(X), np.exp(self.map.T)) / np.sum(np.exp(self.map), axis=1)
+        res = np.dot(np.exp(data), np.exp(self.map.T)) / np.sum(np.exp(self.map), axis=1)
         res = res / (np.exp(np.max(res)) + 1e-8)
         return res
 
     def iterate(self, vector):
         x, y = self.shape
-        # print('map:\n', self.map)
-        # print('vector:\n', vector)
-        delta = self.map - vector
 
-        # Euclidian distance of each neurons with the example
+        # Euclidean distance of each neurons with the input data
+        delta = self.map - vector
         dists = np.sum(delta ** 2, axis=1).reshape(x, y)
 
-        # Best maching unit
+        # active neuron position
         idx = np.argmin(dists)
-        print("Epoch ", self.epoch, ": ", (int(idx / x), idx % y), "; Sigma: ", self.sigma, "; alpha: ", self.alpha)
+        row, col = divmod(idx, y)
+        print("Epoch ", self.epoch, ": ", (row, col), "; Sigma: ", self.sigma, "; alpha: ", self.alpha)
 
         # Linearly reducing the width of Gaussian Kernel
         self.sigma = self.sigma * self.sigma_decay
         dist_map = self.template.reshape(x, y)
 
         # Distance of each neurons in the map from the best matching neuron
-        dists = np.sqrt((dist_map / x - idx / x) ** 2 + (np.mod(dist_map, x) - idx % y) ** 2).reshape(
-            self.n_neurons, 1)
+        dists = np.sqrt((dist_map / x - row) ** 2 + (np.mod(dist_map, x) - col) ** 2).reshape(self.n_neurons, 1)
+
         # dists = self.template - idx
 
         # Applying Gaussian smoothing to distances of neurons from best matching neuron
         h = np.exp(-(dists / self.sigma) ** 2)
 
-                # Updating neurons in the map
+        # Updating neurons in the map
         self.map -= self.alpha * h * delta
 
         # Decreasing alpha
         self.alpha = self.alpha * self.alpha_decay
 
-        # if self.epoch == 0:
-        #     self.display(221)
-        # elif self.epoch == 49:
-        #     self.display(222)
-        # elif self.epoch == 99:
-        #     self.display(223)
-        # elif self.epoch == 149:
-        #     self.display(224)
+        # record epoch
         self.epoch = self.epoch + 1
 
+    # display the SOM model by each neuron's neighbor area size
     def display(self, position=111):
-        nerounMap = self.map
+        neuron_map = self.map
         row, col = self.shape
-        mapDist = []
+        map_dist = []
         for i in range(row):
             for j in range(col):
                 pos = i * row + j
-                neighborSize = 0
+                neighbor_size = 0
                 distance = 0
                 if i > 0:
-                    # dists = np.sum((delta) ** 2, axis=1).reshape(x, y)
-                    distance += np.sqrt(np.sum((nerounMap[pos] - nerounMap[pos - row]) ** 2))
-                    neighborSize += 1
+                    distance += np.sqrt(np.sum((neuron_map[pos] - neuron_map[pos - row]) ** 2))
+                    neighbor_size += 1
                 if i < row - 1:
-                    distance += np.sqrt(np.sum((nerounMap[pos] - nerounMap[pos + row]) ** 2))
-                    neighborSize += 1
+                    distance += np.sqrt(np.sum((neuron_map[pos] - neuron_map[pos + row]) ** 2))
+                    neighbor_size += 1
                 if j > 0:
-                    distance += np.sqrt(np.sum((nerounMap[pos] - nerounMap[pos - 1]) ** 2))
-                    neighborSize += 1
+                    distance += np.sqrt(np.sum((neuron_map[pos] - neuron_map[pos - 1]) ** 2))
+                    neighbor_size += 1
                 if j < col - 1:
-                    distance += np.sqrt(np.sum((nerounMap[pos] - nerounMap[pos + 1]) ** 2))
-                    neighborSize += 1
-                mapDist.append(distance / neighborSize)
-        maxDist = mapDist[np.argmax(mapDist)]
+                    distance += np.sqrt(np.sum((neuron_map[pos] - neuron_map[pos + 1]) ** 2))
+                    neighbor_size += 1
+                map_dist.append(distance / neighbor_size)
+        max_dist = map_dist[np.argmax(map_dist)]
         for i in range(row):
             for j in range(col):
-                plt.subplot(position).scatter(i, j, s=20 * mapDist[i * row + j] / maxDist, c='k', alpha=1)
+                plt.subplot(position).scatter(i, j, s=20 * map_dist[i * row + j] / max_dist, c='k', alpha=1)
         # plt.show()
 
 
-import csv
-import matplotlib.pyplot as plt
-
-
-def testPlot(somMap, test, position):
-    delta = somMap.map - test
-    row, col = somMap.shape
-    print(row,col)
-    # Euclidian distance of each neurons with the example
+# deprecated
+def test_plot(som_map, test, position):
+    delta = som_map.map - test
+    row, col = som_map.shape
+    print(row, col)
+    # Euclidean distance of each neurons with the example
     dists = np.sum(delta ** 2, axis=1).reshape(row, col)
-    # Best maching unit
+    # Best matching unit
     idx = np.argmin(dists)
     # print(idx)
     m, n = divmod(idx, col)
@@ -153,38 +155,79 @@ def testPlot(somMap, test, position):
             plt.subplot(position).scatter(i, j, s=100, c='b', alpha=alphas[i][j])
 
 
-def cluster(somMap, testData, target, position=111):
-    for i in range(testData.shape[0]):
-        delta = somMap.map - testData[i]
-        row, col = somMap.shape
+def cluster(som_map, test_data, target, position=111):
+    # test_data = normalizor.Normalizer.standard_deviation_normalization(test_data, som_map.normalizer)
+    for i in range(test_data.shape[0]):
+        # print(i)
+        delta = som_map.map - test_data[i]
+        row, col = som_map.shape
         dists = np.sum(delta ** 2, axis=1).reshape(row, col)
         idx = np.argmin(dists)
         m, n = divmod(idx, col)
+        # target = list(map(int, target))
         colors = {
-            'Iris-setosa': 'b',
-            'Iris-versicolor': 'r',
-            'Iris-virginica': 'k',
-
+            # 'Iris-setosa': 'b',    # 蓝色   'Iris-setosa'
+            # 'Iris-versicolor': 'r',    # 红色
+            # 'Iris-virginica': 'y',    # 黄色
+            0: 'b',  # 蓝色
+            2: 'r',  # 红色
+            1: 'y',  # 黄色
         }
-        plt.subplot(position).scatter(float(m)+np.random.rand()*1.5-0.75, float(n)+np.random.rand()*1.5-0.75, s=50, c=colors.get(target[i]), alpha=1)
+        row_offset = np.random.rand()*1.5-0.75
+        # print(dists[m][n])
+        col_offset = np.random.rand() * 1.5 - 0.75
+        # col_offset = np.sqrt(np.power(dists[m][n], 2) - np.power(row_offset, 2))
+        # print(col_offset)
+        plt.subplot(position).scatter(float(m)+row_offset, float(n)+col_offset, s=20,
+                                      c=colors.get(target[i]), alpha=1)
     # plt.show()
 
 
+def read_csv_file(address, header=True, sep=','):
+    data = []
+    # label = []
+    attributes = []
+    with open(address) as csv_file:
+        line = csv_file.readline()
+        if line and not attributes:
+            if header is True:
+                attributes = [item.strip('\n ') for item in line.split(sep)]
+                line = csv_file.readline()
+            else:
+                num = len(line.split(sep))
+                for i in range(num):
+                    attributes.append('V'+str(i))
+        while line:
+            record = list(map(float, [item.strip('\n ') for item in line.split(sep)]))
+            # record = [item.strip('\n ') for item in line.split(sep)]
+            # label.append(record[-1])
+            # record = [i for i in map(float, record[:-1])]
+            data.append(record)
+            line = csv_file.readline()
+    return np.array(data), np.array(attributes)
+
+
 def demo():
-    train = []
-    test = []
-    with open('iris.csv') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            train.append(list(map(float, [row['sepal.length'], row['sepal.width'], row['petal.length'], row['petal.width']])))
-            test.append(row['Species '])
-    train = np.array(train)
-    somMap = som(20, 20)
+    train, attributes = read_csv_file('train.csv')
+    train = train[:, :-1]
+    print(train)
+    test, trash = read_csv_file('test.csv', False)
+    # test = train[:, 4]
+    # train = train[:, 0:4]
+    # train = train[:, 0:4]
+    # print(train)
+    #  print(test)
+    # print(data[0])
+    # print(attrs)
     # print(train.shape)
-    somMap.train(train)
-    # display(somMap)
-    cluster(somMap, train, test,211)
-    somMap.display(212)
+    # train = train[:, 0:206]
+    # print(train[0])
+    print(test)
+    som_map = Som(20, 20)
+    som_map.train(train)
+    # cluster(som_map, test[:, 0:206], test[:, 206])
+    cluster(som_map, test[:, :-1], test[:, -1])
+    som_map.display()
     plt.show()
 
 if __name__ == '__main__':
