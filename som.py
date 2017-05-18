@@ -14,7 +14,7 @@ class som():
         self.epoch = 0
 
     def train(self, data, iteration=0, batch_size=1):
-        if  iteration> data.shape[0]:
+        if iteration > data.shape[0]:
             return "iter > dataSize"
         elif iteration == 0:
             iteration = data.shape[0]
@@ -23,7 +23,7 @@ class som():
             # first we initialize the map
             self.map = np.zeros((self.n_neurons, len(data[0])))
 
-            # then we the pricipal components of the input data
+            # then we the principal components of the input data
             eigen = PCA(10, svd_solver="randomized").fit_transform(data.T)
             print(data.T.shape)
             print(eigen.shape)
@@ -52,6 +52,8 @@ class som():
             idx = samples[i:i + batch_size]
             print(idx)
             self.iterate(data[idx])
+            # self.display()
+        # plt.show()
 
     def transform(self, X):
         # We simply compute the dot product of the input with the transpose of the map to get the new input vectors
@@ -66,7 +68,7 @@ class som():
         delta = self.map - vector
 
         # Euclidian distance of each neurons with the example
-        dists = np.sum((delta) ** 2, axis=1).reshape(x, y)
+        dists = np.sum(delta ** 2, axis=1).reshape(x, y)
 
         # Best maching unit
         idx = np.argmin(dists)
@@ -90,7 +92,44 @@ class som():
         # Decreasing alpha
         self.alpha = self.alpha * self.alpha_decay
 
+        # if self.epoch == 0:
+        #     self.display(221)
+        # elif self.epoch == 49:
+        #     self.display(222)
+        # elif self.epoch == 99:
+        #     self.display(223)
+        # elif self.epoch == 149:
+        #     self.display(224)
         self.epoch = self.epoch + 1
+
+    def display(self, position=111):
+        nerounMap = self.map
+        row, col = self.shape
+        mapDist = []
+        for i in range(row):
+            for j in range(col):
+                pos = i * row + j
+                neighborSize = 0
+                distance = 0
+                if i > 0:
+                    # dists = np.sum((delta) ** 2, axis=1).reshape(x, y)
+                    distance += np.sqrt(np.sum((nerounMap[pos] - nerounMap[pos - row]) ** 2))
+                    neighborSize += 1
+                if i < row - 1:
+                    distance += np.sqrt(np.sum((nerounMap[pos] - nerounMap[pos + row]) ** 2))
+                    neighborSize += 1
+                if j > 0:
+                    distance += np.sqrt(np.sum((nerounMap[pos] - nerounMap[pos - 1]) ** 2))
+                    neighborSize += 1
+                if j < col - 1:
+                    distance += np.sqrt(np.sum((nerounMap[pos] - nerounMap[pos + 1]) ** 2))
+                    neighborSize += 1
+                mapDist.append(distance / neighborSize)
+        maxDist = mapDist[np.argmax(mapDist)]
+        for i in range(row):
+            for j in range(col):
+                plt.subplot(position).scatter(i, j, s=20 * mapDist[i * row + j] / maxDist, c='k', alpha=1)
+        # plt.show()
 
 
 import csv
@@ -111,7 +150,24 @@ def testPlot(somMap, test, position):
     alphas = dists[m][n] / dists
     for i in range(row):
         for j in range(col):
-            plt.subplot(position).scatter(i, j, s=10, c='b', alpha=alphas[i][j])
+            plt.subplot(position).scatter(i, j, s=100, c='b', alpha=alphas[i][j])
+
+
+def cluster(somMap, testData, target, position=111):
+    for i in range(testData.shape[0]):
+        delta = somMap.map - testData[i]
+        row, col = somMap.shape
+        dists = np.sum(delta ** 2, axis=1).reshape(row, col)
+        idx = np.argmin(dists)
+        m, n = divmod(idx, col)
+        colors = {
+            'Iris-setosa': 'b',
+            'Iris-versicolor': 'r',
+            'Iris-virginica': 'k',
+
+        }
+        plt.subplot(position).scatter(float(m)+np.random.rand()*1.5-0.75, float(n)+np.random.rand()*1.5-0.75, s=50, c=colors.get(target[i]), alpha=1)
+    # plt.show()
 
 
 def demo():
@@ -120,18 +176,15 @@ def demo():
     with open('iris.csv') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
-            # sepal.length,sepal.width,petal.length,petal.width,Species
             train.append(list(map(float, [row['sepal.length'], row['sepal.width'], row['petal.length'], row['petal.width']])))
             test.append(row['Species '])
     train = np.array(train)
     somMap = som(20, 20)
     # print(train.shape)
     somMap.train(train)
-
-    testPlot(somMap, train[10], 221)
-    testPlot(somMap, train[40], 222)
-    testPlot(somMap, train[80], 223)
-    testPlot(somMap, train[120], 224)
+    # display(somMap)
+    cluster(somMap, train, test,211)
+    somMap.display(212)
     plt.show()
 
 if __name__ == '__main__':
