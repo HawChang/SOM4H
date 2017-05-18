@@ -1,2 +1,2 @@
 # SOM4H
-try once more
+a simple SOM implementation for anomaly prediction
