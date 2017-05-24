@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.decomposition import PCA
 import matplotlib.pyplot as plt
-# import normalizor
+import normalizer
 
 
 class Som:
@@ -17,21 +17,26 @@ class Som:
         self.total = None
         self.alpha_decay = None
         self.sigma_decay = None
-        # self.normalizer = None
+        self.normalizer = None
 
-    def train(self, data, iteration=0, batch_size=1):
+    def normalize(self):
+        pass
+
+    def train(self, data, iteration=0, normalize='linear', batch_size=1):
         if iteration > data.shape[0]:
             return "iter > dataSize"
         elif iteration == 0:
             iteration = data.shape[0]
         if len(self.map) == 0:
-            # if normalization is not None:
-            #     methods = {
-            #         'std': normalizor.Normalizer.standard_deviation_normalization,
-            #         'linear': normalizor.Normalizer.max_min_normalization,
-            #     }
-            #     data, self.normalizer = methods.get(normalization)(data)
-            #     print(data)
+            print("in")
+            if normalize is not None:
+                print("before", data, sep='\n')
+                methods = {
+                    'std': normalizer.Normalizer.standard_deviation_normalization,
+                    'linear': normalizer.Normalizer.max_min_normalization,
+                }
+                data, self.normalizer = methods.get(normalize)(data)
+                print("after", data, sep='\n')
             x, y = self.shape
             # map initialization
             self.map = np.zeros((self.n_neurons, len(data[0])))
@@ -157,21 +162,23 @@ def test_plot(som_map, test, position):
 
 def cluster(som_map, test_data, target, position=111):
     # test_data = normalizor.Normalizer.standard_deviation_normalization(test_data, som_map.normalizer)
-    for i in range(test_data.shape[0]):
+    print(len(test_data))
+    for i in range(len(test_data)):
         # print(i)
         delta = som_map.map - test_data[i]
         row, col = som_map.shape
         dists = np.sum(delta ** 2, axis=1).reshape(row, col)
         idx = np.argmin(dists)
         m, n = divmod(idx, col)
+        print("pos:(", m, ",", n, ")")
         # target = list(map(int, target))
         colors = {
-            # 'Iris-setosa': 'b',    # 蓝色   'Iris-setosa'
-            # 'Iris-versicolor': 'r',    # 红色
-            # 'Iris-virginica': 'y',    # 黄色
-            0: 'b',  # 蓝色
-            2: 'r',  # 红色
-            1: 'y',  # 黄色
+            'Iris-setosa': 'b',    # 蓝色   'Iris-setosa'
+            'Iris-versicolor': 'r',    # 红色
+            'Iris-virginica': 'y',    # 黄色
+            # 0: 'b',  # 蓝色
+            # 2: 'r',  # 红色
+            # 1: 'y',  # 黄色
         }
         row_offset = np.random.rand()*1.5-0.75
         # print(dists[m][n])
@@ -185,48 +192,111 @@ def cluster(som_map, test_data, target, position=111):
 
 def read_csv_file(address, header=True, sep=','):
     data = []
-    # label = []
-    attributes = []
+    label = []
+    attributes_name = []
     with open(address) as csv_file:
         line = csv_file.readline()
-        if line and not attributes:
+        if line and not attributes_name:
+            label = [True for i in range(len(line.split(sep)))]
             if header is True:
-                attributes = [item.strip('\n ') for item in line.split(sep)]
+                attributes_name = [item.strip('\n ') for item in line.split(sep)]
                 line = csv_file.readline()
             else:
                 num = len(line.split(sep))
                 for i in range(num):
-                    attributes.append('V'+str(i))
+                    attributes_name.append('V'+str(i))
         while line:
-            record = list(map(float, [item.strip('\n ') for item in line.split(sep)]))
+            record = [item.strip('\t\n ') for item in line.split(sep)]
+            for i in range(len(label)):
+                if label[i]:
+                    if is_float(record[i]):
+                        continue
+                    else:
+                        label[i] = False
+            # record = [item.strip('\n ') for item in line.split(sep)]
+            #
             # record = [item.strip('\n ') for item in line.split(sep)]
             # label.append(record[-1])
             # record = [i for i in map(float, record[:-1])]
             data.append(record)
             line = csv_file.readline()
-    return np.array(data), np.array(attributes)
+    # print(label)
+    # data = np.array(data)
+    # formats = []
+    # for i in range(len(label)):
+    #     if not label[i]:
+    #         # formats.append('f')
+    #         for x in data:
+    #             # x[i] = float(x[i])
+    #             del x[i]
+        # else:
+        #    formats.append('S32')
+    # data_type = np.dtype({
+    #     'names': attributes,
+    #     'formats': formats
+    # })
+    # print(attributes)
+    # print(formats)
+    # data = np.array(data, dtype=data_type)
+
+    # print(data)
+    return np.array(data), attributes_name
+
+
+def is_float(data):
+    try:
+        float(data)
+        return True
+    except:
+        return False
 
 
 def demo():
-    train, attributes = read_csv_file('train.csv')
-    train = train[:, :-1]
-    print(train)
-    test, trash = read_csv_file('test.csv', False)
+    # data, attributes = read_csv_file('train.csv')
+    # test, trash = read_csv_file('train.csv', False)
+    # train = data[:, :-1]
+    # test = data[:, :-1]
+    # print(train[:, 0:4])
+    # train = np.array(train[:, :-1])
+    # print(train)
+    # test, trash = read_csv_file('iris.csv', False)
     # test = train[:, 4]
     # train = train[:, 0:4]
     # train = train[:, 0:4]
     # print(train)
-    #  print(test)
+    # print(test)
     # print(data[0])
     # print(attrs)
     # print(train.shape)
     # train = train[:, 0:206]
     # print(train[0])
-    print(test)
-    som_map = Som(20, 20)
-    som_map.train(train)
-    # cluster(som_map, test[:, 0:206], test[:, 206])
-    cluster(som_map, test[:, :-1], test[:, -1])
+    # print(test)
+
+    # log测试
+    # data, attributes = read_csv_file('train.csv')
+    # test, trash = read_csv_file('test.csv', False)
+    # train = np.array(data[:, :-1], dtype=np.float)
+    # test = np.array(test[:, :], dtype=np.float)
+    # target = test[:, -1]
+    # som_map = Som(20, 20)
+    # print(train)
+    # som_map.train(train)
+    # test = normalizer.Normalizer.standard_deviation_normalization(test[:, :-1], som_map.normalizer)
+    # print(test)
+    # cluster(som_map, test, target)
+
+    # iris测试
+    data, attributes = read_csv_file('iris.csv')
+    train = np.array(data[:, :-1], dtype=np.float)
+    target = data[:, -1]
+    som_map = Som(10, 10)
+    som_map.train(train, normalize='std')
+    cluster(som_map, train, target)
+
+
+    #
+    #
+    #
     som_map.display()
     plt.show()
 
